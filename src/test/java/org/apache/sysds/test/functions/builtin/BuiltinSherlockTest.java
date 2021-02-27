@@ -21,6 +21,7 @@ package org.apache.sysds.test.functions.builtin;
 
 import java.util.HashMap;
 
+import org.apache.sysds.runtime.matrix.data.MatrixValue;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -32,15 +33,27 @@ import org.apache.sysds.test.TestConfiguration;
 import org.apache.sysds.test.TestUtils;
 
 public class BuiltinSherlockTest extends AutomatedTestBase {
-	private final static String TEST_NAME = "scale";
+	private final static String TEST_NAME = "sherlock";
 	private final static String TEST_DIR = "functions/builtin/";
+	private final static String TEST_CLASS_DIR = TEST_DIR + BuiltinSherlockTest.class.getSimpleName() + "/";
 
 	@Override public void setUp() {
-
+		//TestUtils.clearAssertionInformation();
+		addTestConfiguration(TEST_NAME, new TestConfiguration(TEST_CLASS_DIR, TEST_NAME, new String[]{"B",}));
 	}
 
 	@Test
-	public void minimalTest() {
+	public void testSherlock() {runSherlockTest();}
 
+	private void runSherlockTest()
+	{
+		loadTestConfiguration(getTestConfiguration(TEST_NAME));
+
+		String HOME = SCRIPT_DIR + TEST_DIR;
+		fullDMLScriptName = HOME + TEST_NAME + ".dml";
+		//fullRScriptName = HOME + TEST_NAME + ".R";
+
+		runTest();
 	}
+
 }

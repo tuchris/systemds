@@ -23,6 +23,7 @@ import org.apache.commons.lang.ArrayUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.commons.math3.random.RandomDataGenerator;
+import org.apache.parquet.example.data.simple.IntegerValue;
 import org.apache.sysds.api.mlcontext.Frame;
 import org.apache.sysds.common.Types.ValueType;
 import org.apache.sysds.runtime.DMLRuntimeException;
@@ -33,7 +34,9 @@ import org.apache.sysds.runtime.matrix.data.FrameBlock;
 import org.apache.sysds.runtime.matrix.data.MatrixIndexes;
 import org.apache.sysds.runtime.matrix.data.Pair;
 import org.apache.sysds.runtime.meta.TensorCharacteristics;
+import org.dmg.pmml.True;
 
+import java.lang.reflect.Array;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -849,45 +852,125 @@ public class UtilFunctions {
 
 	public static String columnStringToSherlockFeatures(String input) {
 
-    StringBuffer sb = new StringBuffer(input);
-    StringBuilder outStringBuilder = new StringBuilder();
-    String[] string_array;
-    // remove leading and trailing brackets: []
-    int startOfArray = sb.indexOf("\"[");
-    if (startOfArray >=0) {
-      sb.delete(startOfArray, startOfArray + 2);
-    }
-    int endOfArray = sb.lastIndexOf("]\"");
-    if (endOfArray >=0) {
-      sb.delete(endOfArray, endOfArray + 2);
-    }
+		StringBuffer sb = new StringBuffer(input);
+		StringBuilder outStringBuilder = new StringBuilder();
+		String[] string_array;
+		// remove leading and trailing brackets: []
+		int startOfArray = sb.indexOf("\"[");
+		if (startOfArray >= 0) {
+			sb.delete(startOfArray, startOfArray + 2);
+		}
+		int endOfArray = sb.lastIndexOf("]\"");
+		if (endOfArray >= 0) {
+			sb.delete(endOfArray, endOfArray + 2);
+		}
 
-    // split values depending on their format
-    if (sb.indexOf("'") != -1) { // string contains strings
-      // replace "None" with "'None'"
-      Pattern p = Pattern.compile(", None,");
-      Matcher m = p.matcher(sb);
-      string_array = m.replaceAll(", 'None',").split("'[ ]*,[ ]*'");
-      // remove apostrophe in first and last string element
-      string_array[0] = string_array[0].replaceFirst("'", "");
-      int lastArrayIndex = string_array.length - 1;
-      string_array[lastArrayIndex] = string_array[lastArrayIndex]
-            .substring(0, string_array[lastArrayIndex].length() - 1);
-    } else { // string contains numbers only
-      string_array = sb.toString().split(",");
-    }
+		// split values depending on their format
+		if (sb.indexOf("'") != -1) { // string contains strings
+			// replace "None" with "'None'"
+			Pattern p = Pattern.compile(", None,");
+			Matcher m = p.matcher(sb);
+			string_array = m.replaceAll(", 'None',").split("'[ ]*,[ ]*'");
+			// remove apostrophe in first and last string element
+			string_array[0] = string_array[0].replaceFirst("'", "");
+			int lastArrayIndex = string_array.length - 1;
+			string_array[lastArrayIndex] = string_array[lastArrayIndex]
+					.substring(0, string_array[lastArrayIndex].length() - 1);
+		} else { // string contains numbers only
+			string_array = sb.toString().split(",");
+		}
 
-    // TODO: convert strings to n-dimensional numerical vectors
-    // extract_bag_of_characters_features(raw_sample, n_values), ignore_index=True)
-    // extract_word_embeddings_features(raw_sample), ignore_index=True)
-    // infer_paragraph_embeddings_features(raw_sample, vec_dim), ignore_index=True)
-    // extract_bag_of_words_features(raw_sample), ignore_index=True)
 
-    // select a suitable separator that can be used to read in the file properly
-    String separator = ",;,";
-		for(int i = 0; i< string_array.length; i++) {
-		  outStringBuilder.append(string_array[i]).append(separator);
-    }
+		// TODO: convert strings to n-dimensional numerical vectors
+		// extract_bag_of_characters_features(raw_sample, n_values), ignore_index=True)
+
+
+		Map<Character, List<Integer>> bow = new HashMap<>();
+
+		for(char ch : "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~".toCharArray()){
+			for (String el : string_array) {
+				bow.computeIfAbsent(ch, k -> new ArrayList<>()).add((int) el.chars().filter(cha -> cha == ch).count());
+			}
+		}
+		//bow.forEach((key, value) -> System.out.println(key + ":" + value));
+
+		//ToDo: first string of the csv needs to be the header with the feature names
+		List<Object> string_to_return = new ArrayList<>();
+
+		bow.forEach((key, value) -> {
+			//n_[key]-agg-any
+			string_to_return.add(value.stream().anyMatch(e -> e > 0));
+
+			//n_[key]-agg-all
+			string_to_return.add(value.stream().allMatch(e -> e > 0));
+
+			//n_[key]-agg-mean
+			double mean = value.stream().mapToInt(val -> val).average().orElse(0.0);
+			string_to_return.add(mean);
+
+			//n_[key]-agg-var
+			double temp = 0;
+			for(int e : value)
+				temp += (e - mean) * (e - mean);
+			string_to_return.add(temp /(value.size()-1));
+
+			//n_[key]-agg-min
+			string_to_return.add(value.stream().mapToInt(val -> val).min().orElse(0));
+
+			//n_[key]-agg-max
+			string_to_return.add(value.stream().mapToInt(val -> val).min().orElse(0));
+
+			//n_[key]-agg-median
+			Collections.sort(value);
+			double median;
+			if (value.size() % 2 == 0)
+				median = ((double)value.get(value.size()/2) + (double)value.get(value.size()/2 - 1))/2;
+			else
+				median = (double) value.get(value.size()/2);
+
+			string_to_return.add(median);
+
+			//n_[key]-agg-sum
+			string_to_return.add(value.stream().mapToInt(val -> val).sum());
+
+			//n_[key]-agg-kurtosis
+
+
+			//n_[key]-agg-skewness
+
+		});
+
+		System.out.println(string_to_return);
+		//Map<Character,Integer> frequencies = new HashMap<>();
+		//// should we fill it with every char? sherlock python implementation does but I don't see any reason to
+//
+		//for (String el : string_array) {
+		//	for (char ch : el.toCharArray())
+		//		frequencies.put(ch, frequencies.getOrDefault(ch, 0) + 1);
+		//}
+		//// ToDo this isn't done, find a way to remove spaces for the bag of chars
+		//// frequencies.remove("\\s");
+		////frequencies.forEach((key, value) -> System.out.println(key + ":" + value));
+//
+		//Map<String,Float> features = new HashMap<>();
+		//frequencies.forEach((key, value) -> {
+		//	System.out.println(key);
+		//	features.put("n_['" + key + "]-agg-any", value.floatValue());
+		//	features.put("n_['" + key + "]-agg-all", value.floatValue());
+		//});
+
+
+
+
+		// extract_word_embeddings_features(raw_sample), ignore_index=True)
+		// infer_paragraph_embeddings_features(raw_sample, vec_dim), ignore_index=True)
+		// extract_bag_of_words_features(raw_sample), ignore_index=True)
+
+		// select a suitable separator that can be used to read in the file properly
+		String separator = ",;,";
+		for (int i = 0; i < string_array.length; i++) {
+			outStringBuilder.append(string_array[i]).append(separator);
+		}
 		outStringBuilder.delete(outStringBuilder.length() - separator.length(), outStringBuilder.length());
 		return outStringBuilder.toString();
 	}   

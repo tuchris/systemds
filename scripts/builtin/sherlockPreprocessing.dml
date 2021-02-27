@@ -20,18 +20,19 @@
 #-------------------------------------------------------------
 
 testTransformation = function () {
-  basePath="../sherlock-project/data/data/testing/";
+  basePath="E:/mauro/Documents/Faks/2020W/DataIntegrationandLarge-ScaleAnalysis/sherlock-project/data/data/testing/";
 
-  rawData = read(basePath + "test_values_short.csv",
+  rawData = read(basePath + "raw_input_short.csv",
                         fill=TRUE,
                         header=TRUE
   )
   print(toString(rawData))
 
-  data = map(rawData[,2], "x -> UtilFunctions.columnStringToSherlockFeatures(x)")
+  data = map(rawData[1,2], "x -> UtilFunctions.columnStringToSherlockFeatures(x)")
   print(toString(data))
 
-  write(data, basePath + "transformed_input", format="csv", seperator=",")
+
+  write(data, basePath + "transformed_input", format="csv", seperator=",;,")
 }
 
 readTransformedData = function () {
